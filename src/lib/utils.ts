@@ -1,0 +1,1 @@
+export const formatKmH=(n:number)=>`${Math.round(n)} km/h`;

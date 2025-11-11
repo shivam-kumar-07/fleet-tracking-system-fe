@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap');
+
+body{
+  margin: 0;
+}
+/* width */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+/* Track */
+::-webkit-scrollbar-track {
+  box-shadow: inset 0 0 5px transparent;
+  border-radius: 10px;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: #111a2c;
+  border-radius: 10px;
+}
+.recharts-wrapper {
+  max-width: 100% !important;
+}

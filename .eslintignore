@@ -1,0 +1,11 @@
+# Ignore artifacts:
+build
+coverage
+.next
+node_modules
+public
+out
+dist
+
+# Ignore specific files
+next-env.d.ts
