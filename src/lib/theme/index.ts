@@ -45,6 +45,7 @@ interface CustomTheme extends Theme {
         moving: string;
         idle: string;
         stopped: string;
+        completed: string;
       };
       accent: {
         ai: string;
@@ -56,6 +57,7 @@ interface CustomTheme extends Theme {
         moving: string;
         idle: string;
         stopped: string;
+        completed: string;
       };
       accent?: {
         ai: string;
