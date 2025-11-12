@@ -18,8 +18,8 @@ export default function VehicleMarker({
   return (
     <CircleMarker
       center={[v.lat, v.lng]}
+      radius={selected ? 12 : 8}
       pathOptions={{
-        radius: selected ? 14 : 10,
         color,
         fillColor: color,
         fillOpacity: selected ? 1 : 0.9,

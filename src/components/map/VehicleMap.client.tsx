@@ -1,6 +1,5 @@
 'use client';
 
-import { MapContainer, TileLayer } from 'react-leaflet';
 import Legend from './Legend';
 import FabBot from '../common/FabBot';
 import VehicleMarker from './VehicleMarker';
@@ -8,6 +7,16 @@ import FollowVehicle from './FollowVehicle';
 import { Vehicle } from '@/lib/types';
 import FitBounds from './FitBound';
 import PlaybackControls from '../controls/PlaybackControls';
+import dynamic from 'next/dynamic';
+import { MapContainerProps } from 'react-leaflet';
+import type { Map as LeafletMap } from 'leaflet';
+
+const MapContainer = dynamic<MapContainerProps & React.RefAttributes<LeafletMap>>(
+  () => import('react-leaflet').then(m => m.MapContainer),
+  { ssr: false }
+);
+
+const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 
 const INITIAL_CENTER: [number, number] = [20.5937, 78.9629];
 const INITIAL_ZOOM = 5;
