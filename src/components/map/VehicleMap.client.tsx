@@ -7,6 +7,7 @@ import VehicleMarker from './VehicleMarker';
 import FollowVehicle from './FollowVehicle';
 import { Vehicle } from '@/lib/types';
 import FitBounds from './FitBound';
+import PlaybackControls from '../controls/PlaybackControls';
 
 const INITIAL_CENTER: [number, number] = [20.5937, 78.9629];
 const INITIAL_ZOOM = 5;
@@ -52,6 +53,7 @@ export default function VehicleMap({
 
       <Legend />
       <FabBot />
+      <PlaybackControls />
     </div>
   );
 }

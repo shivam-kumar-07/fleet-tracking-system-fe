@@ -13,7 +13,7 @@ export default function VehicleMarker({
   selected?: boolean;
 }) {
   const theme = useTheme();
-  const color = theme.palette.vehicle[v.status];
+  const color = selected ? theme.palette.vehicle.idle : theme.palette.vehicle[v.status];
 
   return (
     <CircleMarker
@@ -46,7 +46,7 @@ export default function VehicleMarker({
             </div>
 
             {/* Status */}
-            <div style={{ color, fontWeight: 600, fontSize: 12, marginBottom: 4 }}>
+            <div style={{ color: theme.palette.vehicle[v.status], fontWeight: 600, fontSize: 12, marginBottom: 4 }}>
               {v.status.toUpperCase()}
             </div>
           </div>
