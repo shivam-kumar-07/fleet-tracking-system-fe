@@ -76,13 +76,47 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y rsync openssh-client tree
 
-      - name: Configure SSH
+      - name: Configure SSH (Debug Enabled)
         run: |
+          echo "===== STEP 1: Creating ~/.ssh directory ====="
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          ls -ld ~/.ssh
+
+          echo "===== STEP 2: Writing SSH key to id_rsa ====="
+          printf "%s" "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+
+          echo "===== STEP 3: Checking id_rsa file ====="
+          if [ ! -f ~/.ssh/id_rsa ]; then
+            echo "ERROR: id_rsa file was NOT created!"
+            exit 1
+          fi
+
+          echo "===== STEP 4: Permissions for id_rsa ====="
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          ls -l ~/.ssh/id_rsa
+
+          echo "===== STEP 5: Checking id_rsa size (should NOT be 0 bytes) ====="
+          FILESIZE=$(stat -c%s ~/.ssh/id_rsa)
+          echo "id_rsa file size = $FILESIZE bytes"
+          if [ "$FILESIZE" -lt 100 ]; then
+            echo "ERROR: SSH key is too small → key is corrupted or empty"
+            exit 1
+          fi
+
+          echo "===== STEP 6: Running SSH key syntax validation ====="
+          ssh-keygen -l -f ~/.ssh/id_rsa || echo "WARNING: ssh-keygen cannot read key (may be encrypted or invalid)"
+
+          echo "===== STEP 7: Adding EC2 host to known_hosts ====="
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts || {
+            echo "ERROR: ssh-keyscan failed!"
+            exit 1
+          }
+
+          echo "===== STEP 8: Final check of ~/.ssh contents ====="
+          ls -la ~/.ssh
+
+          echo "SSH configuration completed successfully."
 
       - name: Deploy to EC2
         env:
