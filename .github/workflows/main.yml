@@ -38,6 +38,7 @@ jobs:
 
           # Next.js build output + runtime files
           cp -r .next public package.json package-lock.json next.config.js deploy/ || true
+          cp package-lock.json deploy/ || true
 
           # If you use any other folders that are referenced at runtime (e.g. src/data, prisma, etc.), copy them too:
           # cp -r src/data deploy/ || true
@@ -82,6 +83,11 @@ jobs:
         run: |
           rsync -avz --delete deploy/ \
             ${{ secrets.SSH_USER || 'ubuntu' }}@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
+
+      - name: Debug deploy contents
+        run: |
+          echo "Files inside deploy folder:"
+          ls -la deploy
 
       - name: Restart Next.js App on EC2
         env:
