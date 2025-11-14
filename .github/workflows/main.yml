@@ -35,9 +35,18 @@ jobs:
           rm -rf deploy || true
           mkdir deploy
 
-          # Copy only the necessary runtime files
+          # Copy .next
           cp -a .next deploy/.next
-          cp -a public deploy/public
+
+          # Copy public folder ONLY if it exists
+          if [ -d public ]; then
+            echo "public folder found — copying..."
+            cp -a public deploy/public
+          else
+            echo "public folder NOT found — skipping..."
+          fi
+
+          # Copy required files
           cp -a package.json deploy/package.json
           cp -a package-lock.json deploy/package-lock.json
           cp -a next.config.js deploy/next.config.js
