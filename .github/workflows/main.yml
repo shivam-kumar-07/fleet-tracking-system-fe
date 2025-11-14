@@ -1,82 +1,18 @@
-name: Deploy Frontend to EC2
+name: Deploy Frontend
 
 on:
   push:
-    branches:
-      - main
-
-env:
-  NODE_VERSION: 20.17.0
+    branches: ["main"]
 
 jobs:
-  build:
+  deploy-frontend:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Next.js App
-        run: npm run build
-
-      - name: Prepare deploy folder
-        run: |
-          echo "Preparing clean deploy folder..."
-
-          rm -rf deploy || true
-          mkdir deploy
-
-          # Copy .next
-          cp -a .next deploy/.next
-
-          # Copy public folder ONLY if it exists
-          if [ -d public ]; then
-            echo "public folder found — copying..."
-            cp -a public deploy/public
-          else
-            echo "public folder NOT found — skipping..."
-          fi
-
-          # Copy required files
-          cp -a package.json deploy/package.json
-          cp -a package-lock.json deploy/package-lock.json
-          cp -a next.config.js deploy/next.config.js
-
-          echo "Deploy folder built:"
-          ls -la deploy
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: fe-build
-          path: deploy
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: fe-build
-          path: deploy
-
-      - name: Install SSH + rsync
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rsync openssh-client tree
-
-      - name: Configure SSH
+      - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
@@ -84,36 +20,27 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy to EC2
-        env:
-          RSYNC_RSH: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
+      - name: Upload FE files
         run: |
-          echo "Deploying to EC2..."
-
-          # Completely sync deploy folder → directly into /var/www/fleet-fe
           rsync -avz --delete \
-            deploy/ \
-            ubuntu@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
+            --exclude=".git" \
+            . ubuntu@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
 
-      - name: Restart Frontend App
+      - name: Deploy Frontend on EC2
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ubuntu@3.110.167.10 << 'EOF'
           
-            cd "${{ secrets.DEPLOY_DIR }}"
+            cd /var/www/fleet-fe
 
-            echo "Writing .env file..."
             echo "${{ secrets.FE_ENV }}" > .env
 
-            echo "Install production node_modules"
-            npm install --production
+            npm install
+            npm run build
 
-            echo "Restarting PM2 service"
             pm2 stop fleet-fe || true
             pm2 delete fleet-fe || true
             pm2 start npm --name "fleet-fe" -- start
-
             pm2 save
-            pm2 status
 
             exit
           EOF
