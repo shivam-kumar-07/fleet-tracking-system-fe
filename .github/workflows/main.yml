@@ -101,10 +101,10 @@ jobs:
             ls -la
 
             echo "Restarting PM2..."
-            pm2 stop fleet-fe 2>/dev/null || true
-            pm2 delete fleet-fe 2>/dev/null || true
 
-            pm2 start "npm run start" --name fleet-fe --update-env
+            pm2 stop fleet-fe || true
+            pm2 delete fleet-fe || true
+            pm2 start npm --name fleet-fe -- run start
             pm2 save
 
             pm2 status
