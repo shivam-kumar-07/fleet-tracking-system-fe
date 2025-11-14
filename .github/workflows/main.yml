@@ -1,0 +1,112 @@
+name: Build and Deploy FE to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  NODE_VERSION: 20.17.0
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js App
+        run: npm run build
+
+      - name: Prepare deploy folder
+        run: |
+          set -e
+          rm -rf deploy || true
+          mkdir deploy
+
+          # Next.js build output + runtime files
+          cp -r .next public package*.json next.config.js deploy/ || true
+
+          # If you use any other folders that are referenced at runtime (e.g. src/data, prisma, etc.), copy them too:
+          # cp -r src/data deploy/ || true
+
+          # List the package
+          echo "====== deploy contents ======"
+          ls -la deploy
+          du -sh deploy || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-package
+          path: deploy
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-package
+          path: deploy
+
+      - name: Install SSH + rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync openssh-client
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Upload files to EC2
+        env:
+          RSYNC_RSH: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
+        run: |
+          rsync -avz --delete deploy/ \
+            ${{ secrets.SSH_USER:-ubuntu }}@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
+
+      - name: Restart Next.js App on EC2
+        env:
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USER:-ubuntu }}@${{ secrets.EC2_HOST }} << 'EOF_REMOTE'
+            set -e
+            cd "${DEPLOY_DIR}"
+
+            echo "Installing production dependencies..."
+            npm ci --only=production
+
+            echo "Stopping existing PM2 process (if any)..."
+            pm2 stop fleet-fe 2>/dev/null || true
+            pm2 delete fleet-fe 2>/dev/null || true
+
+            echo "Starting Next.js app with PM2..."
+            # Option A: start via npm start
+            pm2 start "npm run start" --name fleet-fe --update-env
+
+            # persist pm2 process list for startup
+            pm2 save
+
+            echo "PM2 list:"
+            pm2 list
+
+            exit 0
+          EOF_REMOTE
