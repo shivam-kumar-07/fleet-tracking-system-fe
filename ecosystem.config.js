@@ -9,7 +9,7 @@ module.exports = {
         },
         env_production: {
           NODE_ENV: "production",
-          NEXT_PUBLIC_API_URL: "https://api.yourdomain.com"
+          NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
         }
       }
     ]
