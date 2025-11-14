@@ -37,7 +37,7 @@ jobs:
           mkdir deploy
 
           # Next.js build output + runtime files
-          cp -r .next public package*.json next.config.js deploy/ || true
+          cp -r .next public package.json package-lock.json next.config.js deploy/ || true
 
           # If you use any other folders that are referenced at runtime (e.g. src/data, prisma, etc.), copy them too:
           # cp -r src/data deploy/ || true
