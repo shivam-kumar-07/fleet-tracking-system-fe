@@ -1,4 +1,4 @@
-name: Build and Deploy FE to EC2
+name: Deploy Frontend to EC2
 
 on:
   push:
@@ -7,9 +7,6 @@ on:
 
 env:
   NODE_VERSION: 20.17.0
-
-permissions:
-  contents: read
 
 jobs:
   build:
@@ -33,35 +30,25 @@ jobs:
 
       - name: Prepare deploy folder
         run: |
-          echo "Preparing deploy folder..."
+          echo "Preparing clean deploy folder..."
 
           rm -rf deploy || true
           mkdir deploy
 
-          # Copy .next properly
-          mkdir -p deploy/.next
-          cp -a .next/. deploy/.next/
+          # Copy only the necessary runtime files
+          cp -a .next deploy/.next
+          cp -a public deploy/public
+          cp -a package.json deploy/package.json
+          cp -a package-lock.json deploy/package-lock.json
+          cp -a next.config.js deploy/next.config.js
 
-          # Copy public
-          if [ -d public ]; then
-            mkdir -p deploy/public
-            cp -a public/. deploy/public/
-          fi
-
-          cp package.json deploy/
-          cp package-lock.json deploy/
-          cp next.config.js deploy/
-          # REMOVE: Copy node_modules (runtime) - This is the key change!
-          # mkdir -p deploy/node_modules
-          # cp -a node_modules/. deploy/node_modules/ 
-
-          echo "Deploy folder contents:"
+          echo "Deploy folder built:"
           ls -la deploy
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deploy-package
+          name: fe-build
           path: deploy
 
   deploy:
@@ -72,13 +59,13 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: deploy-package
+          name: fe-build
           path: deploy
 
       - name: Install SSH + rsync
         run: |
           sudo apt-get update
-          sudo apt-get install -y rsync tree openssh-client
+          sudo apt-get install -y rsync openssh-client tree
 
       - name: Configure SSH
         run: |
@@ -88,37 +75,36 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Upload deploy folder to EC2 (preserve everything)
+      - name: Deploy to EC2 CLEANLY
         env:
           RSYNC_RSH: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
         run: |
-          rsync -aLHvz --delete deploy/ \
-            ${{ secrets.SSH_USER || 'ubuntu' }}@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
+          echo "Deploying to EC2..."
 
-      - name: Restart Next.js FE with PM2
+          # Completely sync deploy folder → directly into /var/www/fleet-fe
+          rsync -avz --delete \
+            deploy/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
+
+      - name: Restart Frontend App
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USER || 'ubuntu' }}@${{ secrets.EC2_HOST }} << 'EOF_REMOTE'
-
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          
             cd "${{ secrets.DEPLOY_DIR }}"
 
-            echo "CURRENT DEPLOY FOLDER:"
-            ls -la
-            echo "TREE STRUCTURE:"
-            tree -L 4 .
+            echo "Writing .env file..."
+            echo "${{ secrets.FE_ENV }}" > .env
 
-            echo "Installing production dependencies..."
-            # ADD THIS STEP: Install only production dependencies on the target server
-            npm install --production 
+            echo "Install production node_modules"
+            npm install --production
 
-            echo "Restarting PM2..."
+            echo "Restarting PM2 service"
             pm2 stop fleet-fe || true
             pm2 delete fleet-fe || true
-
-            # The command below is correct for Next.js production start
-            pm2 start "node node_modules/next/dist/bin/next start -p 3000" --name fleet-fe
+            pm2 start npm --name "fleet-fe" -- start
 
             pm2 save
             pm2 status
 
-            exit 0
-          EOF_REMOTE
+            exit
+          EOF
