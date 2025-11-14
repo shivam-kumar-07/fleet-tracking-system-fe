@@ -22,7 +22,9 @@ jobs:
         run: npm ci
 
       - name: Build Next.js
-        run: npm run build
+        run: | 
+          echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" >> .env
+          npm run build
 
       - name: Prepare ZIP Artifact
         run: |
@@ -78,7 +80,7 @@ jobs:
             unzip -o /tmp/deploy.zip -d .
 
             echo "Writing .env..."
-            echo "${{ secrets.FE_ENV }}" > .env
+            echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" >> .env
 
             echo "Installing production deps..."
             npm install --production
