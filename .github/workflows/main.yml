@@ -81,13 +81,13 @@ jobs:
           RSYNC_RSH: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
         run: |
           rsync -avz --delete deploy/ \
-            ${{ secrets.SSH_USER:-ubuntu }}@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
+            ${{ secrets.SSH_USER || 'ubuntu' }}@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
 
       - name: Restart Next.js App on EC2
         env:
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USER:-ubuntu }}@${{ secrets.EC2_HOST }} << 'EOF_REMOTE'
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USER || 'ubuntu' }}@${{ secrets.EC2_HOST }} << 'EOF_REMOTE'
             set -e
             cd "${DEPLOY_DIR}"
 
