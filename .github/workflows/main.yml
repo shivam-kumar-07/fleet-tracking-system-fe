@@ -28,7 +28,7 @@ jobs:
 
       - name: Deploy Frontend on EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@3.110.167.10 << 'EOF'
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
           
             cd /var/www/fleet-fe
 
