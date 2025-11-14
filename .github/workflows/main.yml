@@ -40,7 +40,10 @@ jobs:
 
           # Copy runtime + build files
           cp -r .next deploy/.next
-          cp -r public deploy/public
+
+          # Copy public folder if it exists
+          if [ -d public ]; then cp -r public deploy/public; fi
+
           cp package.json deploy/package.json
           cp package-lock.json deploy/package-lock.json
           cp next.config.js deploy/next.config.js
