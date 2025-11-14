@@ -38,20 +38,21 @@ jobs:
           rm -rf deploy || true
           mkdir deploy
 
-          # Copy runtime + build files
+          # Build + runtime files
           cp -r .next deploy/.next
 
-          # Copy public folder if it exists
-          if [ -d public ]; then cp -r public deploy/public; fi
+          if [ -d public ]; then
+            cp -r public deploy/public
+          fi
 
           cp package.json deploy/package.json
           cp package-lock.json deploy/package-lock.json
           cp next.config.js deploy/next.config.js
 
-          # Copy node_modules for runtime on EC2 (no npm install needed)
+          # Include node_modules (to avoid npm install on EC2)
           cp -r node_modules deploy/node_modules
 
-          echo "Files inside deploy folder:"
+          echo "Deploy folder contents:"
           ls -la deploy
 
       - name: Upload artifact
@@ -84,31 +85,33 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Upload files to EC2 via rsync
+      - name: Upload files to EC2 via rsync (symlink-safe)
         env:
           RSYNC_RSH: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
         run: |
-          rsync -avz --delete deploy/ \
+          rsync -aLvz --delete deploy/ \
             ${{ secrets.SSH_USER || 'ubuntu' }}@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
 
-      - name: Restart Next.js FE with PM2
+      - name: Restart Next.js FE with PM2 (Direct CLI)
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USER || 'ubuntu' }}@${{ secrets.EC2_HOST }} << 'EOF_REMOTE'
 
             cd "${{ secrets.DEPLOY_DIR }}"
 
-            echo "Skipping npm install because node_modules was deployed"
+            echo "Skipping npm install (node_modules already deployed)"
             ls -la
 
-            echo "Restarting PM2..."
+            echo "Restarting PM2 with direct Next.js CLI..."
 
             pm2 stop fleet-fe || true
             pm2 delete fleet-fe || true
-            pm2 start npm --name fleet-fe -- run start
-            pm2 save
 
+            # Start Next.js using direct path to avoid missing symlink issues
+            pm2 start "node node_modules/next/dist/bin/next start -p 3000" --name fleet-fe
+
+            pm2 save
             pm2 status
 
-            echo "Deployment complete."
+            echo "Deployment completed successfully!"
             exit 0
           EOF_REMOTE
