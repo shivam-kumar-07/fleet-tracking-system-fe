@@ -5,14 +5,49 @@ on:
     branches: ["main"]
 
 jobs:
-  deploy-frontend:
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up SSH
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.17.0
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js
+        run: npm run build
+
+      - name: Prepare ZIP Artifact
+        run: |
+          echo "Preparing ZIP..."
+          rm -rf deploy.zip || true
+          zip -r deploy.zip .next public package.json package-lock.json next.config.js
+
+      - name: Upload ZIP Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fe-zip
+          path: deploy.zip
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download ZIP Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fe-zip
+          path: .
+
+      - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
@@ -20,27 +55,40 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Upload FE files
+      - name: Upload ZIP to EC2
         run: |
-          rsync -avz --delete \
-            --exclude=".git" \
-            . ubuntu@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
+          scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no deploy.zip ubuntu@${{ secrets.EC2_HOST }}:/tmp/deploy.zip
 
-      - name: Deploy Frontend on EC2
+      - name: Deploy on EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
-          
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+
+            set -e
+            echo "Deploying FE..."
+
+            sudo mkdir -p /var/www/fleet-fe
+            sudo chown -R ubuntu:ubuntu /var/www/fleet-fe
+
             cd /var/www/fleet-fe
 
+            echo "Cleaning old build..."
+            rm -rf .next public package.json package-lock.json next.config.js
+
+            echo "Unzipping new build..."
+            unzip -o /tmp/deploy.zip -d .
+
+            echo "Writing .env..."
             echo "${{ secrets.FE_ENV }}" > .env
 
-            npm install
-            npm run build
+            echo "Installing production deps..."
+            npm install --production
 
+            echo "Restarting PM2..."
             pm2 stop fleet-fe || true
             pm2 delete fleet-fe || true
             pm2 start npm --name "fleet-fe" -- start
             pm2 save
 
-            exit
+            echo "SUCCESS"
+            exit 0
           EOF
